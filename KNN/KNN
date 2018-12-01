@@ -1,0 +1,1330 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from gensim.test.utils import common_texts, get_tmpfile\n",
+    "from gensim.models import Word2Vec\n",
+    "\n",
+    "import time\n",
+    "import os\n",
+    "import numpy as np\n",
+    "\n",
+    "import tensorflow as tf\n",
+    "\n",
+    "modelfileName = \"CS286-Word2Vec.model\"\n",
+    "dirNameInput = os.getcwd() + '/Word2VecData_Input'\n",
+    "dirNameOutput = os.getcwd() + '/Word2VecData_Output'\n",
+    "\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "\n",
+    "Word2Vec_model = None\n",
+    "\n",
+    "#BOTH ACTUAL AND SIMULATED\n",
+    "X = None\n",
+    "Y = None\n",
+    "#ONLY ACTUAL\n",
+    "X_Actual = None\n",
+    "Y_Actual = None\n",
+    "#ONLY SIMULATED\n",
+    "X_Simulated = None\n",
+    "Y_Simulated = None\n",
+    "x_train = None\n",
+    "y_train = None\n",
+    "x_test = None\n",
+    "y_test = None\n",
+    "\n",
+    "model = None\n",
+    "result = []\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def createDataFiles():\n",
+    "    import time\n",
+    "    start = time.time()\n",
+    "    stride = 2\n",
+    "    \n",
+    "    fileNamesActual = ['autopark.dat', 'drive.dat', 'idle.dat']\n",
+    "    \n",
+    "    # To only work with simulated data start commenting from here\n",
+    "    fileInput = open(\"Word2VecData_Input\\Word2VecDataActual.txt\", \"w\")\n",
+    "    fileOutput = open(\"Word2VecData_Output\\Word2VecDataActual.txt\", \"w\")\n",
+    "    \n",
+    "\n",
+    "    for i in range(len(fileNamesActual)):\n",
+    "        with open(fileNamesActual[i]) as f:\n",
+    "            content = f.readlines()\n",
+    "\n",
+    "        # Remove the extra spaces from the sentences\n",
+    "        content = [x.strip() for x in content]\n",
+    "        value = int(0.8 * len(content))\n",
+    "        \n",
+    "        value = len(content)\n",
+    "\n",
+    "        cntCntr = 0\n",
+    "        while cntCntr < value:\n",
+    "            iteration = 0\n",
+    "            currMessagePackets = \"\"\n",
+    "\n",
+    "            while iteration < 5 and cntCntr < value:\n",
+    "                parts = content[cntCntr].split(\",\")\n",
+    "\n",
+    "                # this is the whole message\n",
+    "                DATA = parts[3].split(\":\")[1].replace(\" \", \"\")\n",
+    "\n",
+    "                currMessagePackets += str(DATA) + \" \"\n",
+    "\n",
+    "                cntCntr += 1\n",
+    "                iteration += 1\n",
+    "\n",
+    "            if cntCntr < value:\n",
+    "                cntCntr -= stride\n",
+    "            else:\n",
+    "                break\n",
+    "            fileInput.write(currMessagePackets + \"\\n\")\n",
+    "            fileOutput.write(str(i) + \"\\n\")\n",
+    "    fileInput.close()\n",
+    "    fileOutput.close()\n",
+    "    # To only work with Simulated data end commenting till here\n",
+    "\n",
+    "    # To only work with actual data start commenting from here\n",
+    "    # For Simulated data\n",
+    "    fileInput = open(\"Word2VecData_Input\\Word2VecDataSimulated.txt\", \"w\")\n",
+    "    fileOutput = open(\"Word2VecData_Output\\Word2VecDataSimulated.txt\", \"w\")\n",
+    "    fileNamesSimulated = ['New_DRIVE_Data.txt', 'New_IDLE_Data.txt', 'DRIVE.rtf', 'IDLE.rtf']\n",
+    "    arrSimulated = [1, 2, 1, 2]\n",
+    "\n",
+    "    for i in range(len(fileNamesSimulated)):\n",
+    "        with open(fileNamesSimulated[i]) as f:\n",
+    "            content = f.readlines()\n",
+    "\n",
+    "        # Remove the extra spaces from the sentences\n",
+    "        content = [x.strip() for x in content]\n",
+    "\n",
+    "        cntCntr = 0\n",
+    "        while cntCntr < len(content):\n",
+    "            iteration = 0\n",
+    "            currMessagePackets = \"\"\n",
+    "\n",
+    "            while iteration < 5 and cntCntr < len(content):\n",
+    "                # Remove the noise from the files\n",
+    "                DATA = content[cntCntr][15:38]\n",
+    "\n",
+    "                # this is the whole message\n",
+    "                parts = DATA.split()\n",
+    "\n",
+    "                tempo = \"\"\n",
+    "                for j in range(8):\n",
+    "                    if j >= len(parts) or parts[j] == \"  \":\n",
+    "                        tempo += \"00\"\n",
+    "                    else:\n",
+    "                        tempo += parts[j]\n",
+    "\n",
+    "                currMessagePackets += str(tempo) + \" \"\n",
+    "                cntCntr += 1\n",
+    "                iteration += 1\n",
+    "\n",
+    "            if cntCntr < len(content):\n",
+    "                cntCntr -= stride\n",
+    "            else:\n",
+    "                break\n",
+    "            fileInput.write(currMessagePackets + \"\\n\")\n",
+    "            fileOutput.write(str(arrSimulated[i]) + \"\\n\")\n",
+    "\n",
+    "    fileInput.close()\n",
+    "    # To only work with actual data end commenting till here\n",
+    "    end = time.time()\n",
+    "\n",
+    "    print(\"Awesome !!! File processing done !!!\")\n",
+    "    print(\"Total Time for file processing ---> \", end - start)\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "class IteratingClass:\n",
+    "    def __init__(self, dirName):\n",
+    "        self.dirName = dirName\n",
+    "\n",
+    "    def __iter__(self):\n",
+    "        for fName in os.listdir(self.dirName):\n",
+    "            for line in open(os.path.join(self.dirName, fName)):\n",
+    "                yield line.split()\n",
+    "\n",
+    "def createWord2VecModels():\n",
+    "    start = time.time()\n",
+    "    dataDirec = IteratingClass(dirNameInput)\n",
+    "    model = Word2Vec(dataDirec, size=200, window=5, min_count=1, workers=8)\n",
+    "    model.save(modelfileName)\n",
+    "    end = time.time()\n",
+    "    print(\"\\n\\nTraining Successful for Word2Vec Model!!!\")\n",
+    "    print(\"Total Time for Word2Vec model -> \", (end - start))\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def train():\n",
+    "    createDataFiles()\n",
+    "    createWord2VecModels()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Awesome !!! File processing done !!!\n",
+      "('Total Time for file processing ---> ', 0.9378280639648438)\n",
+      "\n",
+      "\n",
+      "Training Successful for Word2Vec Model!!!\n",
+      "('Total Time for Word2Vec model -> ', 1.2917981147766113)\n"
+     ]
+    }
+   ],
+   "source": [
+    "train()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "\n",
+    "# Convert the data into Numpy Arrays\n",
+    "start = time.time()\n",
+    "Word2Vec_model = Word2Vec.load(modelfileName)\n",
+    "x_train = None\n",
+    "def getNumpyArray():\n",
+    "    global X\n",
+    "    global Y\n",
+    "    global X_Actual\n",
+    "    global Y_Actual\n",
+    "    global X_Simulated\n",
+    "    global Y_Simulated\n",
+    "    global dirNameInput\n",
+    "    X = None\n",
+    "    Y = None\n",
+    "    result = []\n",
+    "    for fName in os.listdir(dirNameInput):\n",
+    "        for line in open(os.path.join(dirNameInput, fName)):\n",
+    "            parts = line.split()\n",
+    "            currV = Word2Vec_model.wv[parts[0]]\n",
+    "            currV.setflags(write=1)\n",
+    "            for i in range(1, len(parts)):\n",
+    "                currV += Word2Vec_model.wv[parts[i]]\n",
+    "            currV /= len(parts)\n",
+    "            result.append(np.array(currV))\n",
+    "        if \"Actual\" in fName: \n",
+    "            X_Actual = np.array(result)\n",
+    "            result = []\n",
+    "        else:\n",
+    "            X_Simulated = np.array(result)\n",
+    "            result = []\n",
+    "    \n",
+    "    X = np.concatenate((X_Actual, X_Simulated), axis=0)\n",
+    "                        \n",
+    "    result = []\n",
+    "    for fName in os.listdir(dirNameOutput):\n",
+    "        for line in open(os.path.join(dirNameOutput, fName)):\n",
+    "            currV = int(line)\n",
+    "            result.append([currV])\n",
+    "        if \"Actual\" in fName:\n",
+    "            Y_Actual = np.array(result)\n",
+    "            result = []\n",
+    "        else:\n",
+    "            Y_Simulated = np.array(result)\n",
+    "            result = []\n",
+    "                \n",
+    "    Y = np.concatenate((Y_Actual, Y_Simulated), axis=0)\n",
+    "    \n",
+    "    print(X.shape)\n",
+    "    print(Y.shape)\n",
+    "    end = time.time()\n",
+    "    print(\"Total time for array conversion -> \", end -start)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "(26777, 200)\n",
+      "(26777, 1)\n",
+      "('Total time for array conversion -> ', 1.4609870910644531)\n"
+     ]
+    }
+   ],
+   "source": [
+    "\n",
+    "getNumpyArray()\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# KNN Actuals+Simulated"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from sklearn.neighbors import KNeighborsClassifier"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Actuals and Simulated\n",
+    "\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "x_train, x_test, y_train, y_test = train_test_split(X, Y,test_size=0.30, random_state=1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "\n",
+      "-----------------------------------------------------------\n",
+      "\n",
+      "\n",
+      "('X: ', array([[ 0.1075408 ,  0.07346245, -0.06177807, ...,  0.07590635,\n",
+      "        -0.10396608, -0.1726506 ],\n",
+      "       [ 0.09373774,  0.05824638, -0.04724154, ...,  0.06501274,\n",
+      "        -0.07302765, -0.13795492],\n",
+      "       [ 0.15305845,  0.08584963, -0.08658248, ...,  0.10051292,\n",
+      "        -0.13710465, -0.23729539],\n",
+      "       ...,\n",
+      "       [ 0.27077964,  0.2344991 , -0.10557387, ...,  0.14585146,\n",
+      "        -0.4501658 , -0.46895775],\n",
+      "       [ 0.26700965,  0.23123837, -0.10410259, ...,  0.14384682,\n",
+      "        -0.44362217, -0.46236187],\n",
+      "       [ 0.27014086,  0.23393063, -0.10531533, ...,  0.14549246,\n",
+      "        -0.4490799 , -0.46783525]], dtype=float32))\n",
+      "\n",
+      "\n",
+      "-----------------------------------------------------------\n",
+      "\n",
+      "\n",
+      "('Y: ', array([[0],\n",
+      "       [0],\n",
+      "       [0],\n",
+      "       ...,\n",
+      "       [2],\n",
+      "       [2],\n",
+      "       [2]]))\n",
+      "\n",
+      "\n",
+      "-----------------------------------------------------------\n",
+      "\n",
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "print (\"\\n\")\n",
+    "print (\"-----------------------------------------------------------\")\n",
+    "print (\"\\n\")\n",
+    "print (\"X: \",X)\n",
+    "print (\"\\n\")\n",
+    "print (\"-----------------------------------------------------------\")\n",
+    "print (\"\\n\")\n",
+    "print (\"Y: \",Y)\n",
+    "print (\"\\n\")\n",
+    "print (\"-----------------------------------------------------------\")\n",
+    "print (\"\\n\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# KNN N = 1\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+      "           metric_params=None, n_jobs=1, n_neighbors=1, p=2,\n",
+      "           weights='uniform')\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+       "           metric_params=None, n_jobs=1, n_neighbors=1, p=2,\n",
+       "           weights='uniform')"
+      ]
+     },
+     "execution_count": 13,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "knn = KNeighborsClassifier(n_neighbors=1)\n",
+    "print knn\n",
+    "knn.fit(x_train,np.ravel(y_train,order='C'))  #train the model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 14,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0.9680109534478466\n"
+     ]
+    }
+   ],
+   "source": [
+    "y_pred=knn.predict(x_test)\n",
+    "from sklearn import metrics\n",
+    "print metrics.accuracy_score(y_test,y_pred)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# KNN N = 3"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+      "           metric_params=None, n_jobs=1, n_neighbors=3, p=2,\n",
+      "           weights='uniform')\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+       "           metric_params=None, n_jobs=1, n_neighbors=3, p=2,\n",
+       "           weights='uniform')"
+      ]
+     },
+     "execution_count": 15,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "knn = KNeighborsClassifier(n_neighbors=3)\n",
+    "print knn\n",
+    "knn.fit(x_train,np.ravel(y_train,order='C'))  #train the model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0.9678864824495892\n"
+     ]
+    }
+   ],
+   "source": [
+    "y_pred=knn.predict(x_test)\n",
+    "from sklearn import metrics\n",
+    "print metrics.accuracy_score(y_test,y_pred)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# KNN N = 5"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+      "           metric_params=None, n_jobs=1, n_neighbors=5, p=2,\n",
+      "           weights='uniform')\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+       "           metric_params=None, n_jobs=1, n_neighbors=5, p=2,\n",
+       "           weights='uniform')"
+      ]
+     },
+     "execution_count": 17,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "knn = KNeighborsClassifier(n_neighbors=5)\n",
+    "print knn\n",
+    "knn.fit(x_train,np.ravel(y_train,order='C'))  #train the model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0.964152352501867\n"
+     ]
+    }
+   ],
+   "source": [
+    "y_pred=knn.predict(x_test)\n",
+    "from sklearn import metrics\n",
+    "print metrics.accuracy_score(y_test,y_pred)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# KNN N = 7"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+      "           metric_params=None, n_jobs=1, n_neighbors=7, p=2,\n",
+      "           weights='uniform')\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+       "           metric_params=None, n_jobs=1, n_neighbors=7, p=2,\n",
+       "           weights='uniform')"
+      ]
+     },
+     "execution_count": 19,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "knn = KNeighborsClassifier(n_neighbors=7)\n",
+    "print knn\n",
+    "knn.fit(x_train,np.ravel(y_train,order='C'))  #train the model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 20,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0.962907642519293\n"
+     ]
+    }
+   ],
+   "source": [
+    "y_pred=knn.predict(x_test)\n",
+    "from sklearn import metrics\n",
+    "print metrics.accuracy_score(y_test,y_pred)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# KNN N = 10"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+      "           metric_params=None, n_jobs=1, n_neighbors=10, p=2,\n",
+      "           weights='uniform')\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+       "           metric_params=None, n_jobs=1, n_neighbors=10, p=2,\n",
+       "           weights='uniform')"
+      ]
+     },
+     "execution_count": 21,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "knn = KNeighborsClassifier(n_neighbors=10)\n",
+    "print knn\n",
+    "knn.fit(x_train,np.ravel(y_train,order='C'))  #train the model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 22,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0.962285287528006\n"
+     ]
+    }
+   ],
+   "source": [
+    "y_pred=knn.predict(x_test)\n",
+    "from sklearn import metrics\n",
+    "print metrics.accuracy_score(y_test,y_pred)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# KNN Actuals"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 23,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Actuals\n",
+    "\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "x_train, x_test, y_train, y_test = train_test_split(X_Actual, Y_Actual,test_size=0.30, random_state=1)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# KNN N = 1"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 24,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+      "           metric_params=None, n_jobs=1, n_neighbors=1, p=2,\n",
+      "           weights='uniform')\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+       "           metric_params=None, n_jobs=1, n_neighbors=1, p=2,\n",
+       "           weights='uniform')"
+      ]
+     },
+     "execution_count": 24,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "knn = KNeighborsClassifier(n_neighbors=1)\n",
+    "print knn\n",
+    "knn.fit(x_train,np.ravel(y_train,order='C'))  #train the model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 25,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0.8539057841383423\n"
+     ]
+    }
+   ],
+   "source": [
+    "y_pred=knn.predict(x_test)\n",
+    "from sklearn import metrics\n",
+    "print metrics.accuracy_score(y_test,y_pred)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# KNN N = 3"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 26,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+      "           metric_params=None, n_jobs=1, n_neighbors=3, p=2,\n",
+      "           weights='uniform')\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+       "           metric_params=None, n_jobs=1, n_neighbors=3, p=2,\n",
+       "           weights='uniform')"
+      ]
+     },
+     "execution_count": 26,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "knn = KNeighborsClassifier(n_neighbors=3)\n",
+    "print knn\n",
+    "knn.fit(x_train,np.ravel(y_train,order='C'))  #train the model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 27,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0.8556946929039952\n"
+     ]
+    }
+   ],
+   "source": [
+    "y_pred=knn.predict(x_test)\n",
+    "from sklearn import metrics\n",
+    "print metrics.accuracy_score(y_test,y_pred)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# KNN N = 5"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 28,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+      "           metric_params=None, n_jobs=1, n_neighbors=5, p=2,\n",
+      "           weights='uniform')\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+       "           metric_params=None, n_jobs=1, n_neighbors=5, p=2,\n",
+       "           weights='uniform')"
+      ]
+     },
+     "execution_count": 28,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "knn = KNeighborsClassifier(n_neighbors=5)\n",
+    "print knn\n",
+    "knn.fit(x_train,np.ravel(y_train,order='C'))  #train the model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 29,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0.8449612403100775\n"
+     ]
+    }
+   ],
+   "source": [
+    "y_pred=knn.predict(x_test)\n",
+    "from sklearn import metrics\n",
+    "print metrics.accuracy_score(y_test,y_pred)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# KNN N = 7"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 30,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+      "           metric_params=None, n_jobs=1, n_neighbors=7, p=2,\n",
+      "           weights='uniform')\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+       "           metric_params=None, n_jobs=1, n_neighbors=7, p=2,\n",
+       "           weights='uniform')"
+      ]
+     },
+     "execution_count": 30,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "knn = KNeighborsClassifier(n_neighbors=7)\n",
+    "print knn\n",
+    "knn.fit(x_train,np.ravel(y_train,order='C'))  #train the model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 31,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0.8389982110912343\n"
+     ]
+    }
+   ],
+   "source": [
+    "y_pred=knn.predict(x_test)\n",
+    "from sklearn import metrics\n",
+    "print metrics.accuracy_score(y_test,y_pred)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# KNN N = 10"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 32,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+      "           metric_params=None, n_jobs=1, n_neighbors=10, p=2,\n",
+      "           weights='uniform')\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+       "           metric_params=None, n_jobs=1, n_neighbors=10, p=2,\n",
+       "           weights='uniform')"
+      ]
+     },
+     "execution_count": 32,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "knn = KNeighborsClassifier(n_neighbors=10)\n",
+    "print knn\n",
+    "knn.fit(x_train,np.ravel(y_train,order='C'))  #train the model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 33,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0.8294573643410853\n"
+     ]
+    }
+   ],
+   "source": [
+    "y_pred=knn.predict(x_test)\n",
+    "from sklearn import metrics\n",
+    "print metrics.accuracy_score(y_test,y_pred)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# KNN Simulated"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 34,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Simulated\n",
+    "\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "x_train, x_test, y_train, y_test = train_test_split(X_Simulated, Y_Simulated,test_size=0.30, random_state=1)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# KNN N = 1"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 35,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+      "           metric_params=None, n_jobs=1, n_neighbors=1, p=2,\n",
+      "           weights='uniform')\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+       "           metric_params=None, n_jobs=1, n_neighbors=1, p=2,\n",
+       "           weights='uniform')"
+      ]
+     },
+     "execution_count": 35,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "knn = KNeighborsClassifier(n_neighbors=1)\n",
+    "print knn\n",
+    "knn.fit(x_train,np.ravel(y_train,order='C'))  #train the model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 36,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0.9949661790152587\n"
+     ]
+    }
+   ],
+   "source": [
+    "y_pred=knn.predict(x_test)\n",
+    "from sklearn import metrics\n",
+    "print metrics.accuracy_score(y_test,y_pred)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# KNN N = 3"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 37,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+      "           metric_params=None, n_jobs=1, n_neighbors=3, p=2,\n",
+      "           weights='uniform')\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+       "           metric_params=None, n_jobs=1, n_neighbors=3, p=2,\n",
+       "           weights='uniform')"
+      ]
+     },
+     "execution_count": 37,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "knn = KNeighborsClassifier(n_neighbors=3)\n",
+    "print knn\n",
+    "knn.fit(x_train,np.ravel(y_train,order='C'))  #train the model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 38,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0.9957527135441245\n"
+     ]
+    }
+   ],
+   "source": [
+    "y_pred=knn.predict(x_test)\n",
+    "from sklearn import metrics\n",
+    "print metrics.accuracy_score(y_test,y_pred)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# KNN N = 5"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 39,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+      "           metric_params=None, n_jobs=1, n_neighbors=5, p=2,\n",
+      "           weights='uniform')\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+       "           metric_params=None, n_jobs=1, n_neighbors=5, p=2,\n",
+       "           weights='uniform')"
+      ]
+     },
+     "execution_count": 39,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "knn = KNeighborsClassifier(n_neighbors=5)\n",
+    "print knn\n",
+    "knn.fit(x_train,np.ravel(y_train,order='C'))  #train the model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 40,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0.995123485921032\n"
+     ]
+    }
+   ],
+   "source": [
+    "y_pred=knn.predict(x_test)\n",
+    "from sklearn import metrics\n",
+    "print metrics.accuracy_score(y_test,y_pred)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# KNN N = 7"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 41,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+      "           metric_params=None, n_jobs=1, n_neighbors=7, p=2,\n",
+      "           weights='uniform')\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+       "           metric_params=None, n_jobs=1, n_neighbors=7, p=2,\n",
+       "           weights='uniform')"
+      ]
+     },
+     "execution_count": 41,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "knn = KNeighborsClassifier(n_neighbors=7)\n",
+    "print knn\n",
+    "knn.fit(x_train,np.ravel(y_train,order='C'))  #train the model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 42,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0.9946515652037125\n"
+     ]
+    }
+   ],
+   "source": [
+    "y_pred=knn.predict(x_test)\n",
+    "from sklearn import metrics\n",
+    "print metrics.accuracy_score(y_test,y_pred)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# KNN N = 10"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 43,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+      "           metric_params=None, n_jobs=1, n_neighbors=10, p=2,\n",
+      "           weights='uniform')\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',\n",
+       "           metric_params=None, n_jobs=1, n_neighbors=10, p=2,\n",
+       "           weights='uniform')"
+      ]
+     },
+     "execution_count": 43,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "knn = KNeighborsClassifier(n_neighbors=10)\n",
+    "print knn\n",
+    "knn.fit(x_train,np.ravel(y_train,order='C'))  #train the model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 44,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0.9935504168633003\n"
+     ]
+    }
+   ],
+   "source": [
+    "y_pred=knn.predict(x_test)\n",
+    "from sklearn import metrics\n",
+    "print metrics.accuracy_score(y_test,y_pred)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 2",
+   "language": "python",
+   "name": "python2"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 2
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython2",
+   "version": "2.7.15"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
